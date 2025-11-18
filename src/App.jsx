@@ -1,73 +1,369 @@
-function App() {
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { api } from './components/api'
+
+const PILL = 'inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/70 text-slate-700 shadow-sm hover:bg-white transition'
+
+function useToken() {
+  const [token, setToken] = useState(() => localStorage.getItem('token') || '')
+  const save = (t) => { setToken(t); localStorage.setItem('token', t) }
+  const clear = () => { setToken(''); localStorage.removeItem('token') }
+  return { token, save, clear }
+}
+
+function Auth({ onAuthed }) {
+  const [mode, setMode] = useState('login')
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const submit = async (e) => {
+    e.preventDefault(); setLoading(true); setError('')
+    try {
+      const path = mode === 'login' ? '/auth/login' : '/auth/register'
+      const body = mode === 'login' ? { email, password } : { name, email, password }
+      const res = await api(path, { method: 'POST', body })
+      onAuthed(res.access_token)
+    } catch (err) {
+      setError(err.message)
+    } finally { setLoading(false) }
+  }
+
+  const google = async () => {
+    setLoading(true); setError('')
+    try {
+      const res = await api('/auth/google', { method: 'POST', body: { id_token: 'mock' } })
+      onAuthed(res.access_token)
+    } catch (err) { setError(err.message) } finally { setLoading(false) }
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Subtle pattern overlay */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.05),transparent_50%)]"></div>
-
-      <div className="relative min-h-screen flex items-center justify-center p-8">
-        <div className="max-w-2xl w-full">
-          {/* Header with Flames icon */}
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center justify-center mb-6">
-              <img
-                src="/flame-icon.svg"
-                alt="Flames"
-                className="w-24 h-24 drop-shadow-[0_0_25px_rgba(59,130,246,0.5)]"
-              />
-            </div>
-
-            <h1 className="text-5xl font-bold text-white mb-4 tracking-tight">
-              Flames Blue
-            </h1>
-
-            <p className="text-xl text-blue-200 mb-6">
-              Build applications through conversation
-            </p>
+    <div className="max-w-md w-full mx-auto bg-white/80 backdrop-blur rounded-2xl p-6 shadow-lg">
+      <h2 className="text-2xl font-semibold text-slate-800 mb-1">Halo 👋</h2>
+      <p className="text-slate-600 mb-4">Tidak apa-apa merasa cemas. Yuk masuk dulu.</p>
+      <form onSubmit={submit} className="space-y-3">
+        {mode === 'register' && (
+          <div>
+            <label className="block text-sm text-slate-600 mb-1">Nama</label>
+            <input value={name} onChange={e=>setName(e.target.value)} required className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300" placeholder="Namamu" />
           </div>
+        )}
+        <div>
+          <label className="block text-sm text-slate-600 mb-1">Email</label>
+          <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300" placeholder="kamu@email.com" />
+        </div>
+        <div>
+          <label className="block text-sm text-slate-600 mb-1">Kata sandi</label>
+          <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300" placeholder="••••••••" />
+        </div>
+        <button disabled={loading} className="w-full py-2 rounded-xl bg-sky-500 text-white font-medium hover:bg-sky-600 transition disabled:opacity-60">{loading? 'Memproses...' : (mode==='login'?'Masuk':'Daftar')}</button>
+      </form>
+      <div className="my-3 text-center text-slate-500">atau</div>
+      <button onClick={google} disabled={loading} className="w-full py-2 rounded-xl bg-slate-900 text-white font-medium hover:bg-black transition disabled:opacity-60">Masuk cepat Google</button>
+      <div className="text-center mt-4 text-sm">
+        {mode==='login' ? (
+          <button className="text-sky-600 hover:underline" onClick={()=>setMode('register')}>Belum punya akun? Daftar</button>
+        ) : (
+          <button className="text-sky-600 hover:underline" onClick={()=>setMode('login')}>Sudah punya akun? Masuk</button>
+        )}
+      </div>
+      {error && <p className="text-rose-600 text-sm mt-3">{error}</p>}
+    </div>
+  )
+}
 
-          {/* Instructions */}
-          <div className="bg-slate-800/50 backdrop-blur-sm border border-blue-500/20 rounded-2xl p-8 shadow-xl mb-6">
-            <div className="flex items-start gap-4 mb-6">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                1
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Describe your idea</h3>
-                <p className="text-blue-200/80 text-sm">Use the chat panel on the left to tell the AI what you want to build</p>
-              </div>
-            </div>
+function Dashboard({ token, onLogout }) {
+  const [name, setName] = useState('Teman')
+  const [range, setRange] = useState('week')
+  const [moods, setMoods] = useState([])
+  const [mood, setMood] = useState('😊')
+  const [anx, setAnx] = useState(5)
+  const [triggers, setTriggers] = useState([])
+  const [note, setNote] = useState('')
+  const navigate = useNavigate()
 
-            <div className="flex items-start gap-4 mb-6">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                2
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Watch it build</h3>
-                <p className="text-blue-200/80 text-sm">Your app will appear in this preview as the AI generates the code</p>
-              </div>
-            </div>
+  const chips = ['tugas','sosial','finansial','tidur','kesehatan','cuaca','lainnya']
 
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                3
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Refine and iterate</h3>
-                <p className="text-blue-200/80 text-sm">Continue the conversation to add features and make changes</p>
-              </div>
-            </div>
+  const load = async () => {
+    try {
+      const data = await api(`/moods?range=${range}`, { token })
+      setMoods(data)
+    } catch {}
+  }
+  useEffect(()=>{ load() },[range])
+
+  const save = async () => {
+    await api('/moods', { method:'POST', token, body: { mood_emoji: mood, anxiety_score: anx, triggers, note } })
+    setNote(''); setTriggers([]); await load()
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <header className="mb-6">
+        <h1 className="text-3xl font-bold text-slate-800">Halo, {name} 👋</h1>
+        <p className="text-slate-600">Apa kabarmu hari ini? Tidak apa-apa merasa cemas, kita pelan-pelan ya.</p>
+      </header>
+
+      <section className="grid md:grid-cols-2 gap-4">
+        <div className="bg-white/80 backdrop-blur rounded-2xl p-4 shadow">
+          <h3 className="font-semibold text-slate-800 mb-2">Mood & Kecemasan</h3>
+          <div className="flex items-center gap-3 mb-3">
+            {['😊','😐','😟','😣'].map(e => (
+              <button key={e} className={`text-3xl p-2 rounded-xl ${mood===e?'bg-sky-100 ring-2 ring-sky-300':''}`} onClick={()=>setMood(e)} aria-label={`mood ${e}`}>{e}</button>
+            ))}
           </div>
-
-          {/* Footer */}
-          <div className="text-center">
-            <p className="text-sm text-blue-300/60">
-              No coding required • Just describe what you want
-            </p>
+          <label className="block text-sm text-slate-600">Tingkat kecemasan: {anx}</label>
+          <input type="range" min="1" max="10" value={anx} onChange={e=>setAnx(parseInt(e.target.value))} className="w-full" />
+          <div className="flex flex-wrap gap-2 my-3">
+            {chips.map(ch => (
+              <button key={ch} onClick={()=>setTriggers(t=> t.includes(ch)? t.filter(x=>x!==ch):[...t,ch])} className={`px-3 py-1 rounded-full border ${triggers.includes(ch)?'bg-sky-100 border-sky-300 text-sky-700':'border-slate-200 text-slate-600'}`}>{ch}</button>
+            ))}
+          </div>
+          <input value={note} onChange={e=>setNote(e.target.value)} placeholder="Catatan singkat" className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300" />
+          <div className="flex gap-2 mt-3">
+            <button onClick={save} className="px-4 py-2 rounded-xl bg-sky-500 text-white hover:bg-sky-600">Simpan</button>
+            <button onClick={()=>navigate('/assessment')} className={PILL}>Cek Kecemasan</button>
+            <button onClick={()=>navigate('/breath')} className={PILL}>Latihan Tenang</button>
           </div>
         </div>
+
+        <div className="bg-white/80 backdrop-blur rounded-2xl p-4 shadow">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold text-slate-800">Riwayat</h3>
+            <select value={range} onChange={e=>setRange(e.target.value)} className="px-3 py-1 rounded-lg border border-slate-200">
+              <option value="week">Mingguan</option>
+              <option value="month">Bulanan</option>
+            </select>
+          </div>
+          <div className="space-y-2 max-h-64 overflow-auto pr-1">
+            {moods.length===0 && <p className="text-slate-500">Belum ada data. Yuk catat satu.</p>}
+            {moods.map(m => (
+              <div key={m._id} className="flex items-center justify-between bg-white rounded-xl border border-slate-100 p-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{m.mood_emoji}</span>
+                  <div>
+                    <div className="text-slate-800 font-medium">Kecemasan {m.anxiety_score}/10</div>
+                    <div className="text-slate-500 text-sm">{(m.triggers||[]).join(', ')}</div>
+                  </div>
+                </div>
+                <div className="text-slate-400 text-xs">{(m.date||'').slice(0,10)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="grid md:grid-cols-3 gap-4 mt-4">
+        <Shortcut title="Jurnal Pikiran" desc="Catat dan susun ulang pikiran" to="/journal"/>
+        <Shortcut title="Edukasi" desc="Artikel singkat dan ringan" to="/edu"/>
+        <Shortcut title="Kontak Darurat" desc="Hubungi orang kepercayaan" to="/safety"/>
+      </section>
+
+      <div className="mt-6 text-right">
+        <button onClick={onLogout} className="text-slate-500 hover:text-slate-700">Keluar</button>
       </div>
     </div>
   )
 }
 
-export default App
+function Shortcut({ title, desc, to }){
+  return (
+    <Link to={to} className="block bg-white/80 hover:bg-white transition backdrop-blur rounded-2xl p-4 shadow">
+      <div className="font-semibold text-slate-800">{title}</div>
+      <div className="text-slate-600 text-sm">{desc}</div>
+    </Link>
+  )
+}
+
+function Assessment({ token }){
+  const [answers, setAnswers] = useState([0,0,0,0,0,0,0])
+  const [result, setResult] = useState(null)
+  const submit = async () => {
+    const res = await api('/assessments/gad7', { method:'POST', token, body: { answers } })
+    setResult(res)
+  }
+  return (
+    <div className="max-w-xl mx-auto bg-white/80 backdrop-blur rounded-2xl p-5">
+      <h3 className="text-xl font-semibold text-slate-800 mb-3">Cek Kecemasan (GAD-7 Sederhana)</h3>
+      {answers.map((v,i)=> (
+        <div key={i} className="mb-2">
+          <div className="text-slate-700 mb-1">Pertanyaan {i+1}</div>
+          <input type="range" min="0" max="3" value={v} onChange={e=>setAnswers(a=>{const b=[...a]; b[i]=parseInt(e.target.value); return b})} className="w-full"/>
+          <div className="text-slate-500 text-sm">Skor: {v}</div>
+        </div>
+      ))}
+      <button onClick={submit} className="px-4 py-2 rounded-xl bg-sky-500 text-white hover:bg-sky-600">Lihat Hasil</button>
+      {result && (
+        <div className="mt-3 p-3 rounded-xl bg-sky-50 text-slate-700">
+          <div>Skor: <b>{result.score}</b> — Kategori: <b>{result.category}</b></div>
+          <div className="text-sm mt-1">{result.recommendation}</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Breath(){
+  const [phase, setPhase] = useState('ready')
+  const [dur, setDur] = useState(60)
+  const [time, setTime] = useState(0)
+
+  useEffect(()=>{
+    if(phase==='run'){
+      const start = Date.now()
+      const t = setInterval(()=>{
+        const s = Math.floor((Date.now()-start)/1000)
+        setTime(s)
+        if(s>=dur){ clearInterval(t); setPhase('done') }
+      }, 200)
+      return ()=>clearInterval(t)
+    }
+  },[phase, dur])
+
+  return (
+    <div className="max-w-xl mx-auto bg-white/80 backdrop-blur rounded-2xl p-6 text-center">
+      <h3 className="text-xl font-semibold text-slate-800 mb-2">Latihan Napas</h3>
+      <p className="text-slate-600 mb-4">Tarik napas – Tahan – Hembuskan (4–4–6). Gerakkan perlahan, tidak perlu sempurna.</p>
+      <div className="flex gap-2 justify-center mb-4">
+        {[60,180,300].map(s=> (
+          <button key={s} className={`px-3 py-1 rounded-full border ${dur===s?'bg-sky-100 border-sky-300 text-sky-700':'border-slate-200 text-slate-600'}`} onClick={()=>setDur(s)}>{s/60} mnt</button>
+        ))}
+      </div>
+      <div className="h-56 flex items-center justify-center">
+        <div className={`w-40 h-40 rounded-full bg-sky-300/40 transition-all duration-1000`} style={{ transform: phase==='run' && time%6<3? 'scale(1.15)':'scale(0.9)' }} />
+      </div>
+      <div className="text-slate-600 mb-3">{phase==='run'? `Waktu: ${time}s / ${dur}s` : phase==='done'? 'Selesai. Terima kasih sudah bernapas pelan-pelan.' : 'Siap ketika kamu siap.'}</div>
+      {phase!=='run' ? (
+        <button onClick={()=>{ setTime(0); setPhase('run') }} className="px-4 py-2 rounded-xl bg-sky-500 text-white hover:bg-sky-600">Mulai</button>
+      ) : (
+        <button onClick={()=>setPhase('done')} className="px-4 py-2 rounded-xl bg-slate-500 text-white hover:bg-slate-600">Selesai</button>
+      )}
+    </div>
+  )
+}
+
+function Journal({ token }){
+  const [form, setForm] = useState({ situation:'', automatic_thought:'', emotion:'', evidence_for:'', evidence_against:'', alternative_thought:'' })
+  const [saved, setSaved] = useState(false)
+  const save = async () => {
+    await api('/thoughts', { method:'POST', token, body: form })
+    setSaved(true); setForm({ situation:'', automatic_thought:'', emotion:'', evidence_for:'', evidence_against:'', alternative_thought:'' })
+  }
+  return (
+    <div className="max-w-2xl mx-auto bg-white/80 backdrop-blur rounded-2xl p-5">
+      <h3 className="text-xl font-semibold text-slate-800 mb-3">Jurnal Pikiran (CBT)</h3>
+      {Object.keys(form).map(k => (
+        <div key={k} className="mb-3">
+          <label className="block text-sm text-slate-600 mb-1">{k.replaceAll('_',' ')}</label>
+          <textarea value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300" rows={k==='evidence_for'||k==='evidence_against'?3:2} />
+        </div>
+      ))}
+      <button onClick={save} className="px-4 py-2 rounded-xl bg-sky-500 text-white hover:bg-sky-600">Simpan</button>
+      {saved && <div className="mt-3 text-slate-600">Catatan tersimpan. Terima kasih sudah jujur pada diri sendiri.</div>}
+    </div>
+  )
+}
+
+function Edu(){
+  const articles = [
+    { slug:'anxiety-vs-stress', title:'Memahami Kecemasan vs. Stres', summary:'Perbedaan dan langkah kecil yang bisa kamu lakukan.', tags:['anxiety'], read_time_min:4 },
+    { slug:'box-breathing', title:'Box Breathing 4-4-4-4', summary:'Teknik napas sederhana untuk menenangkan sistem saraf.', tags:['coping'], read_time_min:3 },
+  ]
+  return (
+    <div className="max-w-3xl mx-auto">
+      <h3 className="text-2xl font-semibold text-slate-800 mb-3">Edukasi</h3>
+      <div className="grid md:grid-cols-2 gap-4">
+        {articles.map(a=> (
+          <Link key={a.slug} to={`/articles/${a.slug}`} className="block bg-white/80 backdrop-blur rounded-2xl p-4 hover:bg-white transition">
+            <div className="font-semibold text-slate-800">{a.title}</div>
+            <div className="text-slate-600 text-sm">{a.summary}</div>
+            <div className="text-slate-400 text-xs mt-1">{a.read_time_min} menit baca</div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function Safety(){
+  return (
+    <div className="max-w-xl mx-auto bg-white/80 backdrop-blur rounded-2xl p-5">
+      <h3 className="text-xl font-semibold text-slate-800 mb-2">Kontak Darurat</h3>
+      <p className="text-slate-600 mb-3">Jika kamu butuh bantuan, kamu tidak sendirian. Hubungi orang kepercayaan atau layanan berikut.</p>
+      <div className="space-y-2">
+        <a href="tel:+621500454" className={PILL}>Hotline Kesehatan Jiwa 1500-454</a>
+        <a href="https://contoh-konseling-kampus.id" target="_blank" className={PILL}>Layanan Konseling Kampus</a>
+      </div>
+    </div>
+  )
+}
+
+function Articles(){
+  return (
+    <div className="max-w-2xl mx-auto text-slate-600">Artikel akan hadir di versi berikutnya.</div>
+  )
+}
+
+function Shell(){
+  const { token, save, clear } = useToken()
+  const [route, setRoute] = useState('dashboard')
+  const navigate = useNavigate()
+  useEffect(()=>{
+    // map router
+    if(route==='dashboard') navigate('/')
+  },[route])
+
+  if(!token){
+    return (
+      <Layout>
+        <Hero />
+        <Auth onAuthed={save} />
+      </Layout>
+    )
+  }
+
+  return (
+    <Layout authed onLogout={clear}>
+      <Dashboard token={token} onLogout={clear} />
+    </Layout>
+  )
+}
+
+function Layout({ children, authed, onLogout }){
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-sky-100 via-slate-50 to-sky-50">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_10%,rgba(14,165,233,0.15),transparent_40%),radial-gradient(circle_at_90%_20%,rgba(56,189,248,0.15),transparent_35%)]"/>
+      <nav className="relative max-w-5xl mx-auto flex items-center justify-between p-4">
+        <div className="text-sky-700 font-semibold text-lg">Tenang.in</div>
+        {authed ? (
+          <div className="flex items-center gap-2">
+            <Link to="/breath" className={PILL}>Latihan</Link>
+            <Link to="/assessment" className={PILL}>Cek Kecemasan</Link>
+            <Link to="/edu" className={PILL}>Edukasi</Link>
+            <button onClick={onLogout} className="px-4 py-2 rounded-full bg-sky-600 text-white">Keluar</button>
+          </div>
+        ) : (
+          <div className="text-slate-600 text-sm">Bukan pengganti psikolog</div>
+        )}
+      </nav>
+      <main className="relative p-4 md:p-6">{children}</main>
+      <footer className="relative max-w-5xl mx-auto p-4 text-center text-slate-500 text-sm">Dengan empati • Bahasa lembut • Warna biru menenangkan</footer>
+    </div>
+  )
+}
+
+function Hero(){
+  return (
+    <div className="max-w-3xl mx-auto text-center mb-6">
+      <h1 className="text-4xl md:text-5xl font-bold text-slate-800 mb-3">Apa kabarmu hari ini?</h1>
+      <p className="text-slate-600">Tidak apa-apa merasa cemas. Yuk kita lihat apa yang bisa kita lakukan—pelan-pelan, bersama.</p>
+    </div>
+  )
+}
+
+export default function App(){
+  return <Shell />
+}
+
