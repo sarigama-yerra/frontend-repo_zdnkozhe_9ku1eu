@@ -1,80 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from './components/api'
 
 const PILL = 'inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/70 text-slate-700 shadow-sm hover:bg-white transition'
 
-function useToken() {
-  const [token, setToken] = useState(() => localStorage.getItem('token') || '')
-  const save = (t) => { setToken(t); localStorage.setItem('token', t) }
-  const clear = () => { setToken(''); localStorage.removeItem('token') }
-  return { token, save, clear }
-}
-
-function Auth({ onAuthed }) {
-  const [mode, setMode] = useState('login')
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  const submit = async (e) => {
-    e.preventDefault(); setLoading(true); setError('')
-    try {
-      const path = mode === 'login' ? '/auth/login' : '/auth/register'
-      const body = mode === 'login' ? { email, password } : { name, email, password }
-      const res = await api(path, { method: 'POST', body })
-      onAuthed(res.access_token)
-    } catch (err) {
-      setError(err.message)
-    } finally { setLoading(false) }
-  }
-
-  const google = async () => {
-    setLoading(true); setError('')
-    try {
-      const res = await api('/auth/google', { method: 'POST', body: { id_token: 'mock' } })
-      onAuthed(res.access_token)
-    } catch (err) { setError(err.message) } finally { setLoading(false) }
-  }
-
-  return (
-    <div className="max-w-md w-full mx-auto bg-white/80 backdrop-blur rounded-2xl p-6 shadow-lg">
-      <h2 className="text-2xl font-semibold text-slate-800 mb-1">Halo 👋</h2>
-      <p className="text-slate-600 mb-4">Tidak apa-apa merasa cemas. Yuk masuk dulu.</p>
-      <form onSubmit={submit} className="space-y-3">
-        {mode === 'register' && (
-          <div>
-            <label className="block text-sm text-slate-600 mb-1">Nama</label>
-            <input value={name} onChange={e=>setName(e.target.value)} required className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300" placeholder="Namamu" />
-          </div>
-        )}
-        <div>
-          <label className="block text-sm text-slate-600 mb-1">Email</label>
-          <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300" placeholder="kamu@email.com" />
-        </div>
-        <div>
-          <label className="block text-sm text-slate-600 mb-1">Kata sandi</label>
-          <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300" placeholder="••••••••" />
-        </div>
-        <button disabled={loading} className="w-full py-2 rounded-xl bg-sky-500 text-white font-medium hover:bg-sky-600 transition disabled:opacity-60">{loading? 'Memproses...' : (mode==='login'?'Masuk':'Daftar')}</button>
-      </form>
-      <div className="my-3 text-center text-slate-500">atau</div>
-      <button onClick={google} disabled={loading} className="w-full py-2 rounded-xl bg-slate-900 text-white font-medium hover:bg-black transition disabled:opacity-60">Masuk cepat Google</button>
-      <div className="text-center mt-4 text-sm">
-        {mode==='login' ? (
-          <button className="text-sky-600 hover:underline" onClick={()=>setMode('register')}>Belum punya akun? Daftar</button>
-        ) : (
-          <button className="text-sky-600 hover:underline" onClick={()=>setMode('login')}>Sudah punya akun? Masuk</button>
-        )}
-      </div>
-      {error && <p className="text-rose-600 text-sm mt-3">{error}</p>}
-    </div>
-  )
-}
-
-function Dashboard({ token, onLogout }) {
+function Dashboard() {
   const [name, setName] = useState('Teman')
   const [range, setRange] = useState('week')
   const [moods, setMoods] = useState([])
@@ -88,14 +18,14 @@ function Dashboard({ token, onLogout }) {
 
   const load = async () => {
     try {
-      const data = await api(`/moods?range=${range}`, { token })
+      const data = await api(`/moods?range=${range}`)
       setMoods(data)
     } catch {}
   }
   useEffect(()=>{ load() },[range])
 
   const save = async () => {
-    await api('/moods', { method:'POST', token, body: { mood_emoji: mood, anxiety_score: anx, triggers, note } })
+    await api('/moods', { method:'POST', body: { mood_emoji: mood, anxiety_score: anx, triggers, note } })
     setNote(''); setTriggers([]); await load()
   }
 
@@ -160,10 +90,6 @@ function Dashboard({ token, onLogout }) {
         <Shortcut title="Edukasi" desc="Artikel singkat dan ringan" to="/edu"/>
         <Shortcut title="Kontak Darurat" desc="Hubungi orang kepercayaan" to="/safety"/>
       </section>
-
-      <div className="mt-6 text-right">
-        <button onClick={onLogout} className="text-slate-500 hover:text-slate-700">Keluar</button>
-      </div>
     </div>
   )
 }
@@ -177,11 +103,11 @@ function Shortcut({ title, desc, to }){
   )
 }
 
-function Assessment({ token }){
+function Assessment(){
   const [answers, setAnswers] = useState([0,0,0,0,0,0,0])
   const [result, setResult] = useState(null)
   const submit = async () => {
-    const res = await api('/assessments/gad7', { method:'POST', token, body: { answers } })
+    const res = await api('/assessments/gad7', { method:'POST', body: { answers } })
     setResult(res)
   }
   return (
@@ -244,11 +170,11 @@ function Breath(){
   )
 }
 
-function Journal({ token }){
+function Journal(){
   const [form, setForm] = useState({ situation:'', automatic_thought:'', emotion:'', evidence_for:'', evidence_against:'', alternative_thought:'' })
   const [saved, setSaved] = useState(false)
   const save = async () => {
-    await api('/thoughts', { method:'POST', token, body: form })
+    await api('/thoughts', { method:'POST', body: form })
     setSaved(true); setForm({ situation:'', automatic_thought:'', emotion:'', evidence_for:'', evidence_against:'', alternative_thought:'' })
   }
   return (
@@ -300,53 +226,17 @@ function Safety(){
   )
 }
 
-function Articles(){
-  return (
-    <div className="max-w-2xl mx-auto text-slate-600">Artikel akan hadir di versi berikutnya.</div>
-  )
-}
-
-function Shell(){
-  const { token, save, clear } = useToken()
-  const [route, setRoute] = useState('dashboard')
-  const navigate = useNavigate()
-  useEffect(()=>{
-    // map router
-    if(route==='dashboard') navigate('/')
-  },[route])
-
-  if(!token){
-    return (
-      <Layout>
-        <Hero />
-        <Auth onAuthed={save} />
-      </Layout>
-    )
-  }
-
-  return (
-    <Layout authed onLogout={clear}>
-      <Dashboard token={token} onLogout={clear} />
-    </Layout>
-  )
-}
-
-function Layout({ children, authed, onLogout }){
+function Layout({ children }){
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-100 via-slate-50 to-sky-50">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_10%,rgba(14,165,233,0.15),transparent_40%),radial-gradient(circle_at_90%_20%,rgba(56,189,248,0.15),transparent_35%)]"/>
       <nav className="relative max-w-5xl mx-auto flex items-center justify-between p-4">
         <div className="text-sky-700 font-semibold text-lg">Tenang.in</div>
-        {authed ? (
-          <div className="flex items-center gap-2">
-            <Link to="/breath" className={PILL}>Latihan</Link>
-            <Link to="/assessment" className={PILL}>Cek Kecemasan</Link>
-            <Link to="/edu" className={PILL}>Edukasi</Link>
-            <button onClick={onLogout} className="px-4 py-2 rounded-full bg-sky-600 text-white">Keluar</button>
-          </div>
-        ) : (
-          <div className="text-slate-600 text-sm">Bukan pengganti psikolog</div>
-        )}
+        <div className="flex items-center gap-2">
+          <Link to="/breath" className={PILL}>Latihan</Link>
+          <Link to="/assessment" className={PILL}>Cek Kecemasan</Link>
+          <Link to="/edu" className={PILL}>Edukasi</Link>
+        </div>
       </nav>
       <main className="relative p-4 md:p-6">{children}</main>
       <footer className="relative max-w-5xl mx-auto p-4 text-center text-slate-500 text-sm">Dengan empati • Bahasa lembut • Warna biru menenangkan</footer>
@@ -364,6 +254,10 @@ function Hero(){
 }
 
 export default function App(){
-  return <Shell />
+  return (
+    <Layout>
+      <Hero />
+      <Dashboard />
+    </Layout>
+  )
 }
-
